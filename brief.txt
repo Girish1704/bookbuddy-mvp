@@ -1,0 +1,1 @@
+BookBuddy MVP: users can sign up/login, add/edit/delete books in a personal list, and post short public reviews (max 280 characters).
