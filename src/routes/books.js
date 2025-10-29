@@ -1,107 +1,94 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const { requireAuth } = require('../middleware/auth');
-
 const router = express.Router();
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { requireAuth } = require('../auth');
 
 // List books for the current user
 router.get('/', requireAuth, async (req, res) => {
-    try {
-        const books = await prisma.book.findMany({
-            where: { userId: req.user.id }
-        });
-        res.json(books);
-    } catch (error) {
-        res.status(500).json({ error: 'Internal server error' });
-    }
+try {
+    const books = await prisma.book.findMany({
+    where: { userId: req.userId }
+    });
+    res.json(books);
+} catch (err) {
+    res.status(500).json({ error: 'Failed to fetch books' });
+}
 });
 
 // Create a new book
 router.post('/', requireAuth, async (req, res) => {
-    const { title, author } = req.body;
-    try {
-        const book = await prisma.book.create({
-            data: {
-                title,
-                author,
-                userId: req.user.id
-            }
-        });
-        res.status(201).json(book);
-    } catch (error) {
-        res.status(400).json({ error: 'Bad request' });
-    }
+const { title, author } = req.body;
+if (!title || !author) {
+    return res.status(400).json({ error: 'Title and author are required' });
+}
+try {
+    const book = await prisma.book.create({
+    data: { title, author, userId: req.userId }
+    });
+    res.status(201).json(book);
+} catch (err) {
+    res.status(500).json({ error: 'Failed to create book' });
+}
 });
 
-// Update a book
+// Update a book (owner-only)
 router.put('/:id', requireAuth, async (req, res) => {
-    const { id } = req.params;
-    const { title, author } = req.body;
+const bookId = parseInt(req.params.id, 10);
+const { title, author } = req.body;
+try {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+    if (book.userId !== req.userId) return res.status(403).json({ error: 'Forbidden' });
 
-    try {
-        const book = await prisma.book.findUnique({ where: { id: Number(id) } });
-        if (!book) {
-            return res.status(404).json({ error: 'Book not found' });
-        }
-        if (book.userId !== req.user.id) {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
-        const updatedBook = await prisma.book.update({
-            where: { id: Number(id) },
-            data: { title, author }
-        });
-        res.json(updatedBook);
-    } catch (error) {
-        res.status(400).json({ error: 'Bad request' });
-    }
+    const updated = await prisma.book.update({
+    where: { id: bookId },
+    data: { title, author }
+    });
+    res.json(updated);
+} catch (err) {
+    res.status(500).json({ error: 'Failed to update book' });
+}
 });
 
-// Delete a book
+// Delete a book (owner-only)
 router.delete('/:id', requireAuth, async (req, res) => {
-    const { id } = req.params;
+const bookId = parseInt(req.params.id, 10);
+try {
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+    if (book.userId !== req.userId) return res.status(403).json({ error: 'Forbidden' });
 
-    try {
-        const book = await prisma.book.findUnique({ where: { id: Number(id) } });
-        if (!book) {
-            return res.status(404).json({ error: 'Book not found' });
-        }
-        if (book.userId !== req.user.id) {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
-        await prisma.book.delete({ where: { id: Number(id) } });
-        res.status(204).send();
-    } catch (error) {
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    await prisma.book.delete({ where: { id: bookId } });
+    res.json({ success: true });
+} catch (err) {
+    res.status(500).json({ error: 'Failed to delete book' });
+}
 });
 
 module.exports = router;
 
+// === Extra functions ===
 
-// === Exercise 02 Task 1: Copilot inline suggestion practice ===
-// TODO: Write a function sanitizeInput(str) that trims whitespace, removes script tags, and limits length to 100 chars
-// TODO: Implement function suggestBooksForUser(userId) that queries books and reviews to recommend similar titles
-// Sanitize input function
+// Sanitize user input
 function sanitizeInput(str) {
-    const trimmed = str.trim();
-    const sanitized = trimmed.replace(/<script.*?>.*?<\/script>/gi, '');
-    return sanitized.substring(0, 100);
+return str.trim().replace(/<script.*?>.*?<\/script>/gi, '').slice(0, 100);
 }
 
-// Suggest books for user function
+// Suggest books for a user based on authors
 async function suggestBooksForUser(userId) {
-    try {
-        const books = await prisma.book.findMany({
-            where: { userId },
-            include: { reviews: true } // Assuming there's a reviews relation
-        });
-        // Logic to recommend similar titles based on books and reviews
-        // This is a placeholder for the recommendation logic
-        return books; // Modify this to return recommended titles
-    } catch (error) {
-        throw new Error('Error fetching suggestions');
+try {
+    const userBooks = await prisma.book.findMany({ where: { userId } });
+    const authors = userBooks.map(book => book.author);
+    const recommended = await prisma.book.findMany({
+    where: {
+        author: { in: authors },
+        NOT: { userId }
     }
+    });
+    return recommended;
+} catch (err) {
+    console.error('Failed to suggest books:', err);
+    return [];
+}
 }

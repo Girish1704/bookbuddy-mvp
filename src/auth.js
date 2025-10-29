@@ -39,3 +39,63 @@ async function getUserById(userId) {
     if (!user) throw new Error('User not found');
     return { id: user.id, email: user.email };
 }
+
+// === Exercise 02 Task 2: Contextual Awareness ===
+// TODO: Add a logout endpoint that invalidates JWT on client side (hint: just advise client to delete token)
+async function logout(req, res) {
+    // Invalidate the token on the client side by advising to delete it
+    res.json({ message: 'Logout successful. Please delete your token on the client side.' });
+}
+
+// Export the logout function
+module.exports = { register, login, requireAuth, logout };
+
+// === Exercise 02 Task 2: Contextual Awareness ===
+// TODO: Add an endpoint /me that returns the current user's profile using Prisma
+async function getCurrentUser(req, res) {
+    const userId = req.userId;
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                books: {
+                    select: {
+                        id: true,
+                    },
+                },
+                reviews: {
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    take: 1,
+                    select: {
+                        book: {
+                            select: {
+                                title: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        const bookCount = user.books.length;
+        const latestReviewTitle = user.reviews.length > 0 ? user.reviews[0].book.title : null;
+
+        res.json({
+            id: user.id,
+            email: user.email,
+            bookCount,
+            latestReviewTitle,
+        });
+    } catch (err) {
+        res.status(404).json({ error: err.message });
+    }
+}
+
+// Export the getCurrentUser function
+module.exports = { register, login, requireAuth, logout, getCurrentUser };
