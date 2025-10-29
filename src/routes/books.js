@@ -79,3 +79,29 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+
+
+// === Exercise 02 Task 1: Copilot inline suggestion practice ===
+// TODO: Write a function sanitizeInput(str) that trims whitespace, removes script tags, and limits length to 100 chars
+// TODO: Implement function suggestBooksForUser(userId) that queries books and reviews to recommend similar titles
+// Sanitize input function
+function sanitizeInput(str) {
+    const trimmed = str.trim();
+    const sanitized = trimmed.replace(/<script.*?>.*?<\/script>/gi, '');
+    return sanitized.substring(0, 100);
+}
+
+// Suggest books for user function
+async function suggestBooksForUser(userId) {
+    try {
+        const books = await prisma.book.findMany({
+            where: { userId },
+            include: { reviews: true } // Assuming there's a reviews relation
+        });
+        // Logic to recommend similar titles based on books and reviews
+        // This is a placeholder for the recommendation logic
+        return books; // Modify this to return recommended titles
+    } catch (error) {
+        throw new Error('Error fetching suggestions');
+    }
+}
